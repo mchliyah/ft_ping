@@ -40,7 +40,7 @@ int main(int ac, char **av) {
     if (config.verbose) {
         print_config(&config);
     }
-    
+    ping(&config);
     printf("PING %s: implementation in progress...\n", config.target);
     
     free_resources (&config);

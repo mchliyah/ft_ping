@@ -113,7 +113,7 @@ void parse_arguments(int ac, char **av, t_ping_config *config) {
                 }
                 break;
                 
-            case 'v': config->verbose = 1; break;
+            case 'v': config->verbose++; break;
             case 'q': config->quiet = 1; break;
             case 'n': config->no_dns = 1; break;
             case 'a': config->audiable = 1; break;
@@ -148,11 +148,6 @@ void parse_arguments(int ac, char **av, t_ping_config *config) {
                     fprintf(stderr, "ft_ping: continuous time must be positive\n");
                     exit(1);
                 }
-                break;
-                
-            case '?':
-                // Unknown option
-                exit(1);
                 break;
                 
             default:
