@@ -78,7 +78,12 @@ void parse_arguments(int ac, char **av, t_ping_config *config) {
                 break;
                 
             case 'I':
-                config->target = strdup(optarg);
+                config->source_ip = strdup(optarg);
+                struct in_addr addr;
+                if (inet_pton(AF_INET, config->source_ip, &addr) != 1) {
+                    fprintf(stderr, "ft_ping: invalid source address: %s\n", optarg);
+                    exit(1);
+                }
                 break;
                 
             case 's':

@@ -1,26 +1,29 @@
 #include "../include/ft_ping.h"
 
 
-void resolve_ip(char *target) {
+void resolve_ip(t_ping_config *config) {
     struct addrinfo hints, *res;
     int errcode;
     char addrstr[100];
     void *ptr;
 
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET; // IPv4
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_RAW;
 
-    if ((errcode = getaddrinfo(target, NULL, &hints, &res)) != 0) {
-        fprintf(stderr, "ft_ping: error: cannot resolve %s: %s\n", target, gai_strerror(errcode));
+    if ((errcode = getaddrinfo(config->target, NULL, &hints, &res)) != 0) {
+        fprintf(stderr, "ft_ping: error: cannot resolve %s: %s\n", config->target, gai_strerror(errcode));
         exit(1);
     }
 
     ptr = &((struct sockaddr_in *)res->ai_addr)->sin_addr;
     inet_ntop(res->ai_family, ptr, addrstr, 100);
     freeaddrinfo(res);
-
-    strcpy(target, addrstr);
+    config->target_ip = strdup(addrstr);
+    if (!config->target_ip) {
+        fprintf(stderr, "ft_ping: error: memory allocation failed\n");
+        exit(1);
+    }
 }
 
 void validate_config(t_ping_config *config) {
@@ -35,12 +38,10 @@ void validate_config(t_ping_config *config) {
         exit(1);
     }
     else {
-        resolve_ip(config->target); //check if target input is not an IP address and resolve it
-        // Basic validation of the target as an IP address
-        
+        resolve_ip(config);
         struct in_addr addr;
-        if (inet_pton(AF_INET, config->target, &addr) != 1) {
-            fprintf(stderr, "ft_ping: error: invalid IP address '%s'\n", config->target);
+        if (inet_pton(AF_INET, config->target_ip, &addr) != 1) {
+            fprintf(stderr, "ft_ping: error: invalid IP address '%s'\n", config->target_ip);
             exit(1);
         }
     }

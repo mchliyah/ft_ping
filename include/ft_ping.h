@@ -14,6 +14,7 @@
 #include <netdb.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <sys/time.h>
 
 /* Maximum packet size and default values */
 #define MAX_PACKET_SIZE 65536
@@ -45,6 +46,7 @@ typedef struct s_ping_stats {
 typedef struct s_ping_config {
     // Target information
     char        *target;
+    char        *target_ip;
     char        *source_ip;
 
     int         sockfd; // raw socket file descriptor
@@ -101,6 +103,12 @@ typedef struct s_ping_config {
     (config)->ttl = DEFAULT_TTL; \
     (config)->dont_fragment = -1; /* -1 means not set */ \
     (config)->state = 0; /* Default state */ \
+} while(0)
+
+#define V_PRINT(config, level, fmt, ...) do { \
+    if ((config)->verbose >= (level)) { \
+        printf(fmt, ##__VA_ARGS__); \
+    } \
 } while(0)
 
 // Function prototypes

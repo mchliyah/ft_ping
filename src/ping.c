@@ -1,6 +1,4 @@
 #include "../include/ft_ping.h"
-#include <sys/time.h>
-#include <signal.h>
 
 static t_ping_config *g_config = NULL;
 
@@ -15,7 +13,7 @@ uint16_t checksum(void *b, int len) {
     uint32_t sum = 0;
     uint16_t result;
 
-    for (sum = 0; len > 1; len -= 2)
+    for (; len > 1; len -= 2)
         sum += *buf++;
     if (len == 1)
         sum += *(uint8_t *)buf;
@@ -32,10 +30,23 @@ void create_socket(t_ping_config *config) {
         exit(EXIT_FAILURE);
     }
 
+    // Set a receive timeout to avoid blocking indefinitely
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+    if (setsockopt(config->sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        perror("Setting receive timeout failed");
+    }
+
     memset(&config->addr, 0, sizeof(config->addr));
     config->addr.sin_family = AF_INET;
-    inet_pton(AF_INET, config->target, &config->addr.sin_addr);
+    if (inet_pton(AF_INET, config->target_ip, &config->addr.sin_addr) != 1) {
+        fprintf(stderr, "Invalid target IP address: %s\n", config->target_ip);
+        exit(EXIT_FAILURE);
+    }
+    config->addr.sin_port = 0; // Ensure destination port is zero
     config->addr_len = sizeof(config->addr);
+
     if (config->ttl > 0) {
         if (setsockopt(config->sockfd, IPPROTO_IP, IP_TTL, &config->ttl, sizeof(config->ttl)) < 0) {
             perror("Setting TTL option failed");
@@ -53,11 +64,24 @@ void create_socket(t_ping_config *config) {
     }
 
     if (config->source_ip) {
-        struct in_addr src_addr;
-        inet_pton(AF_INET, config->source_ip, &src_addr);
+        struct sockaddr_in src_addr;
+        memset(&src_addr, 0, sizeof(src_addr));
+        src_addr.sin_family = AF_INET;
+        if (inet_pton(AF_INET, config->source_ip, &src_addr.sin_addr) != 1) {
+            fprintf(stderr, "Invalid source IP address: %s\n", config->source_ip);
+            exit(EXIT_FAILURE);
+        }
+        src_addr.sin_port = 0;
+        if (bind(config->sockfd, (struct sockaddr *)&src_addr, sizeof(src_addr)) < 0) {
+            // Suppress repeated error prints by not printing each send failure
+            // Uncomment the next line for debugging:
+            // perror("Binding to source IP failed");
+            exit(EXIT_FAILURE);
+        }
         if (setsockopt(config->sockfd, IPPROTO_IP, IP_PKTINFO, &src_addr, sizeof(src_addr)) < 0) {
             perror("Setting Source IP option failed");
         }
+        printf("PING %s (%s) from (%s):\n", config->target, config->target_ip, config->source_ip);
     }
 }
 
@@ -78,10 +102,13 @@ void send_icmp_echo_request(t_ping_config *config, int sequence) {
     ssize_t bytes_sent = sendto(config->sockfd, packet, sizeof(packet), 0,
                                 (struct sockaddr *)&config->addr, config->addr_len);
     if (bytes_sent < 0) {
-        perror("Failed to send ICMP Echo Request");
-    } else if (config->verbose) {
-        printf("Sent %zd bytes to %s\n", bytes_sent, config->target);
+        if (config->verbose)
+            perror("Failed to send ICMP Echo Request");
+        return;
     }
+    // Optionally print sent bytes if verbose is on:
+    if (config->verbose)
+        printf("Sent %zd bytes to %s\n", bytes_sent, config->target_ip);
 }
 
 void receive_icmp_echo_reply(t_ping_config *config, struct timeval send_time) {
@@ -91,7 +118,8 @@ void receive_icmp_echo_reply(t_ping_config *config, struct timeval send_time) {
     ssize_t bytes_received = recvfrom(config->sockfd, buffer, sizeof(buffer), 0,
                                       (struct sockaddr *)&reply_addr, &addr_len);
     if (bytes_received < 0) {
-        perror("Failed to receive ICMP Echo Reply");
+        if (config->verbose)
+            perror("Failed to receive ICMP Echo Reply");
         return;
     }
 
@@ -120,9 +148,8 @@ void receive_icmp_echo_reply(t_ping_config *config, struct timeval send_time) {
         if (rtt > config->stats.rtt_max)
             config->stats.rtt_max = rtt;
     } else {
-        if (config->verbose) {
-            printf("Received non-echo reply ICMP packet of type %d\n", icmp_hdr->type);
-        }
+        if (config->verbose)
+            fprintf(stderr, "Received non-echo reply ICMP packet of type %d\n", icmp_hdr->type);
     }
 }
 
@@ -134,13 +161,27 @@ void print_summary(t_ping_config *config) {
     int loss = config->stats.transmitted - config->stats.received;
     int loss_percent = config->stats.transmitted > 0 ? (loss * 100) / config->stats.transmitted : 0;
 
-    printf("\n--- %s ping statistics ---\n", config->target);
+    printf("\n--- %s ping statistics ---\n", config->target_ip);
     printf("%d packets transmitted, %d received, %d%% packet loss, time %ldms\n",
            config->stats.transmitted, config->stats.received, loss_percent, total_time);
     if (config->stats.received > 0) {
         double avg = config->stats.rtt_sum / config->stats.received;
         printf("rtt min/avg/max = %.3f/%.3f/%.3f ms\n",
                config->stats.rtt_min, avg, config->stats.rtt_max);
+    }
+}
+
+void check_limits(t_ping_config *config) {
+    if (config->count > 0 && config->stats.transmitted >= config->count) {
+        config->keep_running = 0;
+    }
+    if (config->deadline > 0) {
+        struct timeval now;
+        gettimeofday(&now, NULL);
+        long elapsed = (now.tv_sec - config->stats.start_time.tv_sec);
+        if (elapsed >= config->deadline) {
+            config->keep_running = 0;
+        }
     }
 }
 
@@ -155,7 +196,7 @@ void ping(t_ping_config *config) {
     config->stats.rtt_max = 0;
     config->stats.rtt_sum = 0;
     gettimeofday(&config->stats.start_time, NULL);
-    config->keep_running = 1; // to keep the loop
+    config->keep_running = 1;
 
     int seq = 1;
     while (config->keep_running) {
@@ -165,7 +206,8 @@ void ping(t_ping_config *config) {
         config->stats.transmitted++;
         receive_icmp_echo_reply(config, send_time);
         seq++;
-        sleep(1);
+        usleep(config->interval);
+        check_limits(config);
     }
     print_summary(config);
     close(config->sockfd);

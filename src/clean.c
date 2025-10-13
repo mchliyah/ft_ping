@@ -3,6 +3,7 @@
 
 void free_resources(t_ping_config *config) {
     if (config->target) free(config->target);
+    if (config->target_ip) free(config->target_ip);
     if (config->source_ip) free(config->source_ip);
     // if (config->resolved_host) free(config->resolved_host);
 }
