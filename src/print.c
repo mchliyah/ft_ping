@@ -1,7 +1,7 @@
 #include "../include/ft_ping.h"
 
-void print_usage(const char *program_name) {
-    printf("Usage: %s [OPTIONS] destination\n\n", program_name);
+void print_usage() {
+    printf("Usage: Ft_ping [OPTIONS] destination\n\n");
     printf("Options:\n");
     printf("  -h, --help              Show this help message and exit\n");
     printf("  -V, --version           Show version information and exit\n");
@@ -25,9 +25,9 @@ void print_usage(const char *program_name) {
     printf("  -S, --statistics        Print statistics\n");
     printf("  -C, --continuous SEC    Continuous ping for specified seconds\n");
     printf("\nExamples:\n");
-    printf("  %s google.com\n", program_name);
-    printf("  %s -c 5 -i 0.5 -s 1000 8.8.8.8\n", program_name);
-    printf("  %s -v -n -t 64 example.com\n", program_name);
+    printf("  Ft_ping : google.com\n");
+    printf("  Ft_ping : -c 5 -i 0.5 -s 1000 8.8.8.8\n");
+    printf("  Ft_ping : -v -n -t 64 example.com\n");
 }
 
 void print_config(t_ping_config *config) {
@@ -44,4 +44,10 @@ void print_config(t_ping_config *config) {
     printf("  Flood: %d\n", config->flood);
     printf("  Pattern: 0x%02X\n", config->pattern);
     printf("  Timestamp: %d\n", config->timestamp);
+}
+
+void print_version(void) {
+    printf("ft_ping custom implementation v1.0\n");
+    printf("Based on UNIX ping utilities\n");
+    exit(EXIT_SUCCESS);
 }

@@ -73,9 +73,6 @@ void create_socket(t_ping_config *config) {
         }
         src_addr.sin_port = 0;
         if (bind(config->sockfd, (struct sockaddr *)&src_addr, sizeof(src_addr)) < 0) {
-            // Suppress repeated error prints by not printing each send failure
-            // Uncomment the next line for debugging:
-            // perror("Binding to source IP failed");
             exit(EXIT_FAILURE);
         }
         if (setsockopt(config->sockfd, IPPROTO_IP, IP_PKTINFO, &src_addr, sizeof(src_addr)) < 0) {
@@ -106,7 +103,6 @@ void send_icmp_echo_request(t_ping_config *config, int sequence) {
             perror("Failed to send ICMP Echo Request");
         return;
     }
-    // Optionally print sent bytes if verbose is on:
     if (config->verbose)
         printf("Sent %zd bytes to %s\n", bytes_sent, config->target_ip);
 }
@@ -135,12 +131,22 @@ void receive_icmp_echo_reply(t_ping_config *config, struct timeval send_time) {
     inet_ntop(AF_INET, &reply_addr.sin_addr, addr_str, sizeof(addr_str));
 
     if (icmp_hdr->type == ICMP_ECHOREPLY) {
-        printf("%zd bytes from %s: icmp_seq=%d ttl=%d time=%.1f ms\n",
-               bytes_received - (ip_hdr->ihl * 4),
-               addr_str,
-               ntohs(icmp_hdr->un.echo.sequence),
-               ip_hdr->ttl,
-               rtt);
+        if (!config->quiet){
+            if (config->timestamp) {
+                struct timeval tv;
+                gettimeofday(&tv, NULL);
+                struct tm *tm_info = localtime(&tv.tv_sec);
+                char time_buffer[64];
+                strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", tm_info);
+                printf("[%s.%06ld] ", time_buffer, tv.tv_usec);
+            }
+            printf("%zd bytes from %s: icmp_seq=%d ttl=%d time=%.1f ms\n",
+                bytes_received - (ip_hdr->ihl * 4),
+                addr_str,
+                ntohs(icmp_hdr->un.echo.sequence),
+                ip_hdr->ttl,
+                rtt);
+        }
         config->stats.received++;
         config->stats.rtt_sum += rtt;
         if (rtt < config->stats.rtt_min)
@@ -199,6 +205,11 @@ void ping(t_ping_config *config) {
     config->keep_running = 1;
 
     int seq = 1;
+    printf("PING %s (%s) %d(%zu) bytes of data.\n",
+           config->target,
+           config->target_ip,
+           config->size,
+           sizeof(struct icmphdr) + config->size);
     while (config->keep_running) {
         struct timeval send_time;
         gettimeofday(&send_time, NULL);

@@ -15,14 +15,15 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <time.h>
+#include <errno.h>
 
-/* Maximum packet size and default values */
 #define MAX_PACKET_SIZE 65536
 #define DEFAULT_PING_SIZE 56
-#define DEFAULT_TIMEOUT 3
-#define DEFAULT_COUNT 4
+#define DEFAULT_TIMEOUT -1
+#define DEFAULT_COUNT -1
 #define DEFAULT_CONTINUOUS 0
-#define DEFAULT_INTERVAL 1
+#define DEFAULT_INTERVAL 1000000
 #define DEFAULT_TTL 64
 
 typedef struct s_option
@@ -42,50 +43,42 @@ typedef struct s_ping_stats {
     struct timeval start_time;
 } t_ping_stats;
 
-/* Updated config structure with a new "state" field */
 typedef struct s_ping_config {
-    // Target information
     char        *target;
     char        *target_ip;
     char        *source_ip;
 
-    int         sockfd; // raw socket file descriptor
-    struct sockaddr_in addr; // target address
-    socklen_t   addr_len; // length of the address
+    int         sockfd;
+    struct sockaddr_in addr;
+    socklen_t   addr_len;
 
-    // Basic operation
-    int         count;          // -c
-    int         continuous;     // -t (time in seconds)
-    int         interval;       // -i
-    int         timeout;        // -W
-    int         deadline;       // -w (seconds until timeout)
+    int         count;          
+    int         continuous;     
+    int         interval;      
+    int         timeout;
+    int         deadline;     
     
-    // Packet options
-    int         size;           // -s
-    int         ttl;            // -t (TTL)
-    int         tos;            // -Q (Type of Service)
-    int         dont_fragment;  // -M (do/don't fragment)
-    int         pattern;        // -p (pattern to fill)
+    int         size;
+    int         ttl;
+    int         tos; 
+    int         dont_fragment;
+    int         pattern;
     
-    // Output control
-    int         verbose;        // -v
-    int         quiet;          // -q
-    int         no_dns;         // -n
-    int         audiable;       // -a
-    int         flood;          // -f
-    int         statistics;     // -S (print statistics)
-    
-    // Special modes
-    int         help;           // -h
-    int         version;        // -V
-    int         timestamp;      // -D
-    int         route;          // -R (Record route)
+    int         verbose;
+    int         quiet;
+    int         no_dns;
+    int         audiable;
+    int         flood;
+    int         statistics;
 
-    // Runtime statistics and control
+    int         help;
+    int         version;
+    int         timestamp;
+    int         route;
+
     t_ping_stats stats;
     volatile sig_atomic_t keep_running;
 
-    // Added state for internal usage (0: idle, 1: active, etc.)
     int         state;
 } t_ping_config;
 
@@ -101,8 +94,8 @@ typedef struct s_ping_config {
     (config)->version = 0; \
     (config)->interval = DEFAULT_INTERVAL; \
     (config)->ttl = DEFAULT_TTL; \
-    (config)->dont_fragment = -1; /* -1 means not set */ \
-    (config)->state = 0; /* Default state */ \
+    (config)->dont_fragment = -1; \
+    (config)->state = 0; \
 } while(0)
 
 #define V_PRINT(config, level, fmt, ...) do { \
@@ -111,9 +104,8 @@ typedef struct s_ping_config {
     } \
 } while(0)
 
-// Function prototypes
 void    parse_arguments(int ac, char **av, t_ping_config *config);
-void    print_usage(const char *program_name);
+void    print_usage(void);
 void    print_version(void);
 void    validate_config(t_ping_config *config);
 void    free_resources(t_ping_config *config);
@@ -121,5 +113,6 @@ void    clean_exit(t_ping_config *config, int exit_code);
 void    print_config(t_ping_config *config);
 void    ping(t_ping_config *config);
 unsigned short checksum(void *b, int len);
+void    print_version(void);
 
 #endif
