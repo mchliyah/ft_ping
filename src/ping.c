@@ -121,7 +121,6 @@ void receive_icmp_echo_reply(t_ping_config *config, struct timeval send_time) {
 
     struct timeval recv_time;
     gettimeofday(&recv_time, NULL);
-
     double rtt = (recv_time.tv_sec - send_time.tv_sec) * 1000.0 +
                  (recv_time.tv_usec - send_time.tv_usec) / 1000.0;
 
@@ -131,7 +130,7 @@ void receive_icmp_echo_reply(t_ping_config *config, struct timeval send_time) {
     inet_ntop(AF_INET, &reply_addr.sin_addr, addr_str, sizeof(addr_str));
 
     if (icmp_hdr->type == ICMP_ECHOREPLY) {
-        if (!config->quiet){
+        if (!config->quiet) {
             if (config->timestamp) {
                 struct timeval tv;
                 gettimeofday(&tv, NULL);
@@ -140,12 +139,21 @@ void receive_icmp_echo_reply(t_ping_config *config, struct timeval send_time) {
                 strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", tm_info);
                 printf("[%s.%06ld] ", time_buffer, tv.tv_usec);
             }
-            printf("%zd bytes from %s: icmp_seq=%d ttl=%d time=%.1f ms\n",
-                bytes_received - (ip_hdr->ihl * 4),
-                addr_str,
-                ntohs(icmp_hdr->un.echo.sequence),
-                ip_hdr->ttl,
-                rtt);
+            if (config->verbose)
+                printf("%zd bytes from %s: icmp_seq=%d ident=%d ttl=%d time=%.1f ms\n",
+                       bytes_received - (ip_hdr->ihl * 4),
+                       addr_str,
+                       ntohs(icmp_hdr->un.echo.sequence),
+                       ntohs(icmp_hdr->un.echo.id),
+                       ip_hdr->ttl,
+                       rtt);
+            else
+                printf("%zd bytes from %s: icmp_seq=%d ttl=%d time=%.1f ms\n",
+                       bytes_received - (ip_hdr->ihl * 4),
+                       addr_str,
+                       ntohs(icmp_hdr->un.echo.sequence),
+                       ip_hdr->ttl,
+                       rtt);
         }
         config->stats.received++;
         config->stats.rtt_sum += rtt;
@@ -153,7 +161,15 @@ void receive_icmp_echo_reply(t_ping_config *config, struct timeval send_time) {
             config->stats.rtt_min = rtt;
         if (rtt > config->stats.rtt_max)
             config->stats.rtt_max = rtt;
-    } else {
+    }
+    else if (icmp_hdr->type == ICMP_TIME_EXCEEDED) {
+        struct iphdr *inner_ip = (struct iphdr *)(buffer + (ip_hdr->ihl * 4) + sizeof(struct icmphdr));
+        struct icmphdr *inner_icmp = (struct icmphdr *)((char *)inner_ip + (inner_ip->ihl * 4));
+        int seq = ntohs(inner_icmp->un.echo.sequence);
+        if (!config->quiet)
+            printf("From %s icmp_seq=%d Time to live exceeded\n", addr_str, seq);
+    }
+    else {
         if (config->verbose)
             fprintf(stderr, "Received non-echo reply ICMP packet of type %d\n", icmp_hdr->type);
     }
@@ -203,6 +219,9 @@ void ping(t_ping_config *config) {
     config->stats.rtt_sum = 0;
     gettimeofday(&config->stats.start_time, NULL);
     config->keep_running = 1;
+
+    V_PRINT(config, 1, "ping: socket fd %d socket type %d protocol %d\n",
+            config->sockfd, SOCK_RAW, IPPROTO_ICMP);
 
     int seq = 1;
     printf("PING %s (%s) %d(%zu) bytes of data.\n",
