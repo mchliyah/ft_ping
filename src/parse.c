@@ -21,11 +21,12 @@ void parse_arguments(int ac, char **av, t_ping_config *config) {
     int opt;
     int option_index = 0;
     
-    const char *short_options = "hVc:i:I:s:t:W:w:vqn";
+    const char *short_options = "h?Vc:i:I:s:t:W:w:vqn";
 
     while ((opt = getopt_long(ac, av, short_options, 
                               (const struct option *)long_options, &option_index)) != -1) {
         switch (opt) {
+            case '?':
             case 'h':
                 config->help = 1;
                 break;
@@ -103,10 +104,10 @@ void parse_arguments(int ac, char **av, t_ping_config *config) {
     } else if (!config->target) {
         if (config->help) {
             print_usage();
-            return;
+            exit(EXIT_SUCCESS);
         } else if (config->version) {
             print_version();
-            return;
+            exit(EXIT_SUCCESS);
         } else {
             fprintf(stderr, "ft_ping: no target specified\n");
             exit(EXIT_FAILURE);

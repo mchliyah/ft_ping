@@ -12,7 +12,7 @@ MAKEFLAGS     := -j
 
 SRCS        := $(wildcard $(SRCS_DIR)/*.c)
 OBJS        := $(patsubst $(SRCS_DIR)/%.c,$(OBJ_DIR)/%.o,$(SRCS))
-DEPS        := $(OBJS:.o=.d)   # For dependency tracking
+DEPS        := $(OBJS:.o=.d)
 
 BUILD_MODE  ?= DEBUG 
 
